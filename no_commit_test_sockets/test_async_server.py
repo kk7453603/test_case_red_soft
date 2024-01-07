@@ -21,12 +21,10 @@ async def handle_client(reader, writer):
         print(f'Аутентификация не удалась для {address}')
         return
 
-
     # Добавление авторизованного клиента в список
     client_id = auth_success[1]
     clients[client_id] = writer
     print(clients)
-
 
     try:
         while True:
@@ -88,10 +86,9 @@ def check_auth(login, passwd):
     """, (login, passwd))
     result = resp.fetchone()
 
-
     if result is not None and len(result) == 1:
 
-        c.execute("""UPDATE clients SET conn_status = 1 WHERE id = ?""",(result[0]))
+        c.execute("""UPDATE clients SET conn_status = 1 WHERE id = ?""", (result[0]))
         conn.commit()
         c.close()
         conn.close()
@@ -122,22 +119,28 @@ def create_table():
     conn.close()
 
 
-# верно
+# работает
 def add_client(user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status=0):
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
-    c.execute('''INSERT INTO clients (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status)
+
+    resp = c.execute('''SELECT (id) FROM clients WHERE id_hard_drive = ?''', (id_hard_drive,))
+    res = resp.fetchone()
+    print(res)
+    if res is None:
+        c.execute('''INSERT INTO clients (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status)
                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
               (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status))
-    conn.commit()
+        conn.commit()
+
     conn.close()
 
 
-# верно не точно, возвращает ip адрес  неавторизованных, но подключенных клиентов
+# не проверено
 def get_not_authorized_clients():
     row = []
-    for key in connected.keys():
-        row.append(key)
+    for key, val in connected.keys():
+        row.append([key, val])
     return row
 
 
@@ -171,15 +174,13 @@ def update_auth_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_dr
         c.execute('''UPDATE clients SET user_name = ?, ram_size = ?, cpu_count = ?, disk_size = ?, id_hard_drive = ?
                 WHERE id = ?''', (user_name, ram_size, cpu_count, disk_size, id_hard_drive, id))
         conn.commit()
-        conn.close()
-        return True
 
     conn.close()
-    return False
+
 
 
 # Верно
-def get_all_disks():
+def get_stats():
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
     c.execute('''SELECT COUNT(*),SUM(ram_size),SUM(cpu_count) FROM clients''')
@@ -200,11 +201,12 @@ async def kill_server(server):
     print("Сервер успешно остановлен.")
 
 
-async def exit_client(writer):
+async def kill_client(writer):
     print("Отключение клиента...")
     writer.close()
     await writer.wait_closed()
     print("Клиент успешно отключен.")
+
 
 
 def update_vm_params(vm_id, ram_size=None, cpu_count=None, disk_size=None):
