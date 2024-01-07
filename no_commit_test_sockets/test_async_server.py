@@ -91,7 +91,7 @@ def check_auth(login, passwd):
 
     if result is not None and len(result) == 1:
 
-        c.execute("""UPDATE clients SET conn_status = 1""")
+        c.execute("""UPDATE clients SET conn_status = 1 WHERE id = ?""",(result[0]))
         conn.commit()
         c.close()
         conn.close()
