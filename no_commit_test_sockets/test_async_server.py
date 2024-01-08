@@ -19,6 +19,7 @@ async def handle_client(reader, writer):
         await writer.drain()
         writer.close()
         print(f'Аутентификация не удалась для {address}')
+        del connected[address]
         return
 
     # Добавление авторизованного клиента в список
@@ -28,17 +29,28 @@ async def handle_client(reader, writer):
 
     try:
         while True:
-            data = await reader.read(100)
-            message = data.decode()
-
+            data = await reader.read(255)
+            print(data)
+            message = data.decode().split('|')
+            print(message)
             # Обработка команд от клиента
-            if message.lower() == 'info':  # Получение информации о клиентах
-                info = get_clients_info()
-                writer.write(info.encode())
+            if message[0].lower() == 'add_client':
+
+                if add_client(message[1], message[2], message[3], message[4], message[5], message[6]):
+                    writer.write(b"user added!")
+                else:
+                    writer.write(b"user add error!")
+
+                await writer.drain()
+            elif message[0].lower() == 'all_connected_clients':
+                res = get_not_authorized_clients()
+                writer.write(res.encode())
                 await writer.drain()
             else:
                 writer.write(b"Unsupportable command.")
                 await writer.drain()
+
+
     except Exception as e:
         print(f'Ошибка при работе с клиентом {address}: {str(e)}')
     finally:
@@ -56,7 +68,7 @@ async def authenticate_client(reader, writer):
     await writer.drain()
 
     # data = await reader.read(100)
-    login_passwd = await reader.read(100)
+    login_passwd = await reader.read(255)
     login, passwd = login_passwd.split(b'|')
 
     print(login, passwd)
@@ -64,11 +76,12 @@ async def authenticate_client(reader, writer):
     login = login.decode().strip()
     passwd = passwd.decode().strip()
 
+    # print(login, passwd)
     # writer.write(b"password on server")
     # await writer.drain()
-
-    auth = check_auth(login, passwd)
-    print(auth)
+    ####################################### Отсюда дальше не выполняется
+    auth = await check_auth(login, passwd)
+    print(f"AUTH {auth}")
     if auth == -1:
         writer.write(b"Incorrect password!")
         await writer.drain()
@@ -79,26 +92,38 @@ async def authenticate_client(reader, writer):
     return [True, auth]
 
 
-def check_auth(login, passwd):
-    conn = sqlite3.connect('clients.db')
-    c = conn.cursor()
-    resp = c.execute("""SELECT id FROM clients WHERE (user_name=? and user_passwd=?)
-    """, (login, passwd))
-    result = resp.fetchone()
-
-    if result is not None and len(result) == 1:
-
-        c.execute("""UPDATE clients SET conn_status = 1 WHERE id = ?""", (result[0]))
+# Доделано!
+async def check_auth(login, passwd):
+    try:
+        print(f"началась auth для {login}")
+        conn = sqlite3.connect('clients.db')
+        c = conn.cursor()
+        resp = c.execute("""SELECT id FROM clients WHERE (user_name=? and user_passwd=?)
+        """, (login, passwd))
+        result = resp.fetchone()
+        # print(result)
         conn.commit()
-        c.close()
-        conn.close()
+    except Exception as e:
+        print(e)
+    finally:
 
-        return result[0]
-    else:
-
-        c.close()
-        conn.close()
-        return -1
+        if result is not None and len(result) == 1:
+            print(f"Result {result} {result[0]}")
+            try:
+                c.execute("""UPDATE clients SET conn_status = 1 WHERE id = ?""", (result[0],))
+                conn.commit()
+                # Ошибка ниже
+            except sqlite3.Error as e:
+                print(e.sqlite_errorcode)
+            finally:
+                c.close()
+                conn.close()
+                return result[0]
+        else:
+            print("-")
+            c.close()
+            conn.close()
+            return -1
 
 
 # верно
@@ -115,6 +140,7 @@ def create_table():
                         id_hard_drive INT UNIQUE,
                         conn_status BOOLEAN DEFAULT 0
                     )''')
+
     conn.commit()
     conn.close()
 
@@ -130,17 +156,21 @@ def add_client(user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_d
     if res is None:
         c.execute('''INSERT INTO clients (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status)
                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
-              (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status))
+                  (user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive, conn_status))
         conn.commit()
+        conn.close()
+        return True
 
     conn.close()
+    return False
 
 
 # не проверено
 def get_not_authorized_clients():
-    row = []
-    for key, val in connected.keys():
-        row.append([key, val])
+    #print(connected)
+    #print([str(ip) + ':' + str(port) for ip, port in connected.keys()])
+    row = "!".join([str(ip) + ':' + str(port) for ip, port in connected.keys()])
+    print(f"get_not_authorized_clients {row}")
     return row
 
 
@@ -152,7 +182,6 @@ def get_authorized_clients():
     return row
 
 
-# Не доделано!
 def get_all_authorized_and_connected_clients():
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
@@ -176,7 +205,6 @@ def update_auth_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_dr
         conn.commit()
 
     conn.close()
-
 
 
 # Верно
@@ -208,34 +236,10 @@ async def kill_client(writer):
     print("Клиент успешно отключен.")
 
 
-
-def update_vm_params(vm_id, ram_size=None, cpu_count=None, disk_size=None):
+def rm_virt_id(id):
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
-
-    update_query = 'UPDATE clients SET'
-    update_values = []
-
-    if ram_size is not None:
-        update_query += ' ram_size = ?,'
-        update_values.append(ram_size)
-
-    if cpu_count is not None:
-        update_query += ' cpu_count = ?,'
-        update_values.append(cpu_count)
-
-    if disk_size is not None:
-        update_query += ' disk_size = ?,'
-        update_values.append(disk_size)
-
-    # Удаление последней запятой из запроса
-    update_query = update_query.rstrip(',')
-
-    # Добавление условия по vm_id
-    update_query += ' WHERE id = ?'
-    update_values.append(vm_id)
-
-    c.execute(update_query, tuple(update_values))
+    c.execute('DELETE FROM clients WHERE id = ?', (id,))
     conn.commit()
     conn.close()
 
