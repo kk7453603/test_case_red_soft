@@ -1,6 +1,6 @@
 import hashlib
 import asyncio
-
+import json
 
 async def send_request():
     reader, writer = await asyncio.open_connection('127.0.0.1', 8888)  # 1 запрос
@@ -39,9 +39,13 @@ async def send_request():
                 print(f"Сервер сообщает:\n {response.decode()}")
 
             elif command == "all_auth_clients":
-                pass
+                writer.write(command.encode() + b'|')
+                response = await reader.read(255)
+                print(f"Сервер сообщает:\n {response.decode()}")
             elif command == "all_clients":
-                pass
+                writer.write(command.encode() + b'|')
+                response = await reader.read(255)
+                print(f"Сервер сообщает:\n {response.decode()}")
             elif command == "exit":
                 pass
             elif command == "update_client":

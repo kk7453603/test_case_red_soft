@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import sqlite3
+import json
 
 clients = {}  # Словарь для хранения авторизованных подключенных клиентов
 connected = {}  # Словарь для хранения  подключенных клиентов (без авторизации)
@@ -45,6 +46,14 @@ async def handle_client(reader, writer):
             elif message[0].lower() == 'all_connected_clients':
                 res = get_not_authorized_clients()
                 writer.write(res.encode())
+                await writer.drain()
+            elif message[0].lower() == 'all_auth_clients':
+                res = get_authorized_clients()
+                writer.write(res)
+                await writer.drain()
+            elif message[0].lower() == 'all_clients':
+                res = get_all_authorized_and_connected_clients()
+                writer.write(res)
                 await writer.drain()
             else:
                 writer.write(b"Unsupportable command.")
@@ -167,29 +176,40 @@ def add_client(user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_d
 
 # не проверено
 def get_not_authorized_clients():
-    #print(connected)
-    #print([str(ip) + ':' + str(port) for ip, port in connected.keys()])
+    # print(connected)
+    # print([str(ip) + ':' + str(port) for ip, port in connected.keys()])
     row = "!".join([str(ip) + ':' + str(port) for ip, port in connected.keys()])
     print(f"get_not_authorized_clients {row}")
     return row
 
 
-# не проверено, возвращает id авторизованных клиентов
+# сейчас в разработке
 def get_authorized_clients():
-    row = []
-    for key in clients.keys():
-        row.append(key)
-    return row
+    conn = sqlite3.connect('clients.db')
+    c = conn.cursor()
+    # id_s = '(' + " , ".join([str(key) for key in clients.keys()]) + ')'
+    placeholders = ', '.join(['?'] * len(clients))
+    query = "SELECT user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE id IN ({})".format(
+        placeholders)
+    c.execute(query, *clients.keys())  # Возможна ошибка
+    data = c.fetchall()
+    conn.close()
+    json_data = json.dumps(data).encode()
+    return json_data
 
 
+# в разработке
 def get_all_authorized_and_connected_clients():
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
-    c.execute('SELECT * FROM clients WHERE conn_status = 1')
+    c.execute('SELECT user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE conn_status = 1')
     rows = c.fetchall()
+    #print(rows)
+    rows_json = json.dumps(rows).encode()
+    #print(rows_json)
     conn.close()
 
-    return rows
+    return rows_json
 
 
 # Верно
