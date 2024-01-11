@@ -43,16 +43,50 @@ async def handle_client(reader, writer):
                     writer.write(b"user add error!")
 
                 await writer.drain()
+
             elif message[0].lower() == 'all_connected_clients':
                 res = get_not_authorized_clients()
                 writer.write(res.encode())
                 await writer.drain()
+
             elif message[0].lower() == 'all_auth_clients':
                 res = get_authorized_clients()
                 writer.write(res)
                 await writer.drain()
-            elif message[0].lower() == 'all_clients':
+
+            elif message[0].lower() == 'all_clients':  # доделать обработку json
                 res = get_all_authorized_and_connected_clients()
+                writer.write(res)
+                await writer.drain()
+
+            elif message[0].lower() == 'exit':
+                writer.write(b"You are disconnected from the server!")
+                await writer.drain()
+                await writer.wait_closed()
+                writer.close()
+                print(f'Соединение с {address} закрыто')
+                del clients[client_id]
+                break
+
+            elif message[0].lower() == 'update_client':
+                if update_client(client_id, message[1], message[3], message[4], message[5], message[6]):
+                    writer.write(b"user modified!")
+                else:
+                    writer.write(b"user modify error!")
+
+            elif message[0].lower() == 'get_stats':
+                res = get_stats()
+                writer.write(res)
+                await writer.drain()
+
+            elif message[0].lower() == 'del_client':
+                id = message[1]
+                rm_virt_id(id)
+                writer.write("Operation complete")
+                await writer.drain()
+
+            elif message[0].lower() == 'get_info':
+                res = get_all_clients()
                 writer.write(res)
                 await writer.drain()
             else:
@@ -63,9 +97,9 @@ async def handle_client(reader, writer):
     except Exception as e:
         print(f'Ошибка при работе с клиентом {address}: {str(e)}')
     finally:
-        writer.close()
+        # writer.close()
         print(f'Соединение с {address} закрыто')
-        del clients[client_id]  # Удаление клиента из списка
+        # del clients[client_id]  # Удаление клиента из списка
 
 
 async def authenticate_client(reader, writer):
@@ -189,9 +223,9 @@ def get_authorized_clients():
     c = conn.cursor()
     # id_s = '(' + " , ".join([str(key) for key in clients.keys()]) + ')'
     placeholders = ', '.join(['?'] * len(clients))
-    query = "SELECT user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE id IN ({})".format(
+    query = "SELECT user_name, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE id IN ({})".format(
         placeholders)
-    c.execute(query, *clients.keys())  # Возможна ошибка
+    c.execute(query, list(clients.keys()))  # Возможна ошибка
     data = c.fetchall()
     conn.close()
     json_data = json.dumps(data).encode()
@@ -202,18 +236,30 @@ def get_authorized_clients():
 def get_all_authorized_and_connected_clients():
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
-    c.execute('SELECT user_name, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE conn_status = 1')
+    c.execute(
+        'SELECT user_name, ram_size, cpu_count, disk_size, id_hard_drive FROM clients WHERE conn_status = 1')
     rows = c.fetchall()
-    #print(rows)
+    # print(rows)
     rows_json = json.dumps(rows).encode()
-    #print(rows_json)
+    print(rows_json)
     conn.close()
+    return rows_json
 
+
+def get_all_clients():
+    conn = sqlite3.connect('clients.db')
+    c = conn.cursor()
+    c.execute(
+        'SELECT * FROM clients')
+    rows = c.fetchall()
+    rows_json = json.dumps(rows).encode()
+    print(rows_json)
+    conn.close()
     return rows_json
 
 
 # Верно
-def update_auth_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_drive):
+def update_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_drive):
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
     resp = c.execute('''SELECT (id) FROM clients WHERE id_hard_drive = ?''', (id_hard_drive,))
@@ -223,18 +269,22 @@ def update_auth_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_dr
         c.execute('''UPDATE clients SET user_name = ?, ram_size = ?, cpu_count = ?, disk_size = ?, id_hard_drive = ?
                 WHERE id = ?''', (user_name, ram_size, cpu_count, disk_size, id_hard_drive, id))
         conn.commit()
+        conn.close()
+        return True
 
     conn.close()
+    return False
 
 
 # Верно
 def get_stats():
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
-    c.execute('''SELECT COUNT(*),SUM(ram_size),SUM(cpu_count) FROM clients''')
-    rows = c.fetchall()
+    c.execute('''SELECT COUNT(*),SUM(ram_size),SUM(cpu_count),SUM(disk_size) FROM clients''')
+    row = c.fetchone()
     conn.close()
-    return rows
+    response_data = json.dumps(row).encode()
+    return response_data
 
 
 # Не проверено
