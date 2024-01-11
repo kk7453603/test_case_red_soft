@@ -25,8 +25,8 @@ class TestMethods(unittest.TestCase):
         self.curs.execute("SELECT MAX(id) FROM clients;")
         id = int(self.curs.fetchone()[0])
         id_hard_drive_hash = sha256((str(id) + "updated_user").encode()).hexdigest()
-        truncated_hash = id_hard_drive_hash[:32]
-        result = update_client(id, 'updated_user', 8, 4, 200, truncated_hash)
+        truncated_hash = id_hard_drive_hash[:16]
+        result = update_client(id, 'updated_user','123', 8, 4, 200, truncated_hash)
         self.assertTrue(result)
 
     def test_add_client(self):

@@ -61,7 +61,7 @@ async def handle_client(reader, writer):
                 break
 
             elif message[0].lower() == 'update_client':
-                if update_client(client_id, message[1], message[3], message[4], message[5], message[6]):
+                if update_client(client_id, message[1], message[2], message[3], message[4], message[5], message[6]):
                     writer.write(b"user modified!")
                 else:
                     writer.write(b"user modify error!")
@@ -219,14 +219,14 @@ def get_all_clients():
     return rows_json
 
 
-def update_client(id, user_name, ram_size, cpu_count, disk_size, id_hard_drive):
+def update_client(id, user_name, passwd, ram_size, cpu_count, disk_size, id_hard_drive):
     conn = sqlite3.connect('clients.db')
     c = conn.cursor()
     resp = c.execute('''SELECT (id) FROM clients WHERE id_hard_drive = ?''', (id_hard_drive,))
     res = resp.fetchone()
     if res is None or res[0] == id:
-        c.execute('''UPDATE clients SET user_name = ?, ram_size = ?, cpu_count = ?, disk_size = ?, id_hard_drive = ?
-                WHERE id = ?''', (user_name, ram_size, cpu_count, disk_size, id_hard_drive, id))
+        c.execute('''UPDATE clients SET user_name = ?, user_passwd = ?, ram_size = ?, cpu_count = ?, disk_size = ?, id_hard_drive = ?
+                WHERE id = ?''', (user_name, passwd, ram_size, cpu_count, disk_size, id_hard_drive, id))
         conn.commit()
         conn.close()
         return True
