@@ -1,12 +1,11 @@
-import hashlib
 import asyncio
 import json
 
 
 async def send_request():
-    reader, writer = await asyncio.open_connection('127.0.0.1', 8888)  # 1 запрос
+    reader, writer = await asyncio.open_connection('127.0.0.1', 8888)
 
-    # Аутентификация клиента
+
     auth_success = await authenticate_client(reader, writer)
     if not auth_success:
         print("Ошибка аутентификации! Закрытие соединения.")
@@ -28,10 +27,7 @@ async def send_request():
 
                 query = b'|'.join(
                     (command.encode(), username, user_passwd, ram_size, cpu_count, disk_size, id_hard_drive))
-                print(query)
                 writer.write(query)
-                # await writer.drain()
-
                 response = await reader.read(255)
                 print(f"Сервер сообщает:\n {response.decode()}")
 
@@ -67,6 +63,7 @@ async def send_request():
                 writer.close()
                 await writer.wait_closed()
                 print(f"Сервер сообщает:\n {response.decode()}")
+                break
 
             elif command == "get_stats":
                 writer.write(command.encode() + b'|')
@@ -88,13 +85,12 @@ async def send_request():
                     print(
                         f"Id Клиента: {client[0]},Имя клиента: {client[1]}, Пароль клиента: {client[2]}, Объем RAM: {client[3]}, Количество ядер CPU: {client[4]}, Объем жесткого диска: {client[5]}, ID жесткого диска: {client[6]}, Статус подключения: {client[7]}")
 
+            else:
+                print("Команды не существует! Попробуйте снова")
+
             if command != "exit":
                 await writer.drain()
-            # writer.write(command.encode())
-            # await writer.drain()  # 1
 
-            # response = await reader.read(255)
-            # print(f"Сервер сообщает:\n {response.decode()}")
     except Exception as e:
         print(f'Ошибка при работе с сервером: {str(e)}')
 
@@ -104,24 +100,21 @@ async def send_request():
 
 
 async def authenticate_client(reader, writer):
-    response = await reader.read(255)  # 1 ответ
+    response = await reader.read(255)
     password = response.decode().strip()
-    # print(password)
     if password == "Write password:":
         print(f"Сервер запросил пароль. Введите логин и пароль:")
-
-        login = input("Введите логин: ").encode()
-        passwd = input("Введите пароль: ").encode()
-
-        writer.write(login + b'|' + passwd)
+        login = input("Введите логин: ")
+        passwd = input("Введите пароль: ")
+        data = json.dumps({"login": login, "passwd": passwd})
+        writer.write(data.encode())
         await writer.drain()
 
-        # Отсюда дальше не выполняется
         response = await reader.read(255)
         print(f"Сервер сообщает: {response.decode()}")
         return response.decode() == "Correct auth"
     else:
-        return False  # Страховка на случай непредвиденного ответа
+        return False
 
 
 asyncio.run(send_request())
