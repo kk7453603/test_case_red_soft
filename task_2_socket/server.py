@@ -74,7 +74,7 @@ async def handle_client(reader, writer):
             elif message[0].lower() == 'del_client':
                 id = message[1]
                 rm_client_id(id)
-                writer.write("Operation complete")
+                writer.write(b"Operation complete")
                 await writer.drain()
 
             elif message[0].lower() == 'get_info':

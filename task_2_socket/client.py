@@ -15,7 +15,7 @@ async def send_request():
     try:
         while True:
             print("Введите команду: ")
-            command = input().lower()
+            command = input().lower().strip()
 
             if command == "add_client" or command == "update_client":
                 username = input("Введите имя пользователя: ").strip().encode()
