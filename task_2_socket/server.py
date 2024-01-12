@@ -79,7 +79,6 @@ async def handle_client(reader, writer):
 
             elif message[0].lower() == 'get_info':
                 res = get_all_clients()
-                print(res)
                 writer.write(res)
                 await writer.drain()
             else:
